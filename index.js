@@ -1,6 +1,5 @@
 const pino = require("pino")
 const qrcode = require("qrcode-terminal")
-const axios = require("axios")
 
 const { 
   default: makeWASocket,
@@ -12,7 +11,7 @@ const {
 
 // ====== BOT SERVER HP ======
 // Versi ringan tanpa sharp dan canvas
-// Support: .menu, .ping, .open, .brat, .bratvid (via API)
+// Support: .menu, .ping, .open
 
 async function startBot() {
   try {
@@ -143,13 +142,6 @@ async function startBot() {
 │ • .ping
 │   Cek status bot
 │
-├─ *STICKER*
-│ • .brat <teks>
-│   Buat sticker text brat
-│   
-│ • .bratvid <teks>
-│   Buat sticker animasi brat
-│
 └─ *UTILITY*
   • .open
     Buka foto/video view once
@@ -157,7 +149,7 @@ async function startBot() {
 
 ━━━━━━━━━━━━━━━━━
 🏃 Bot Server HP
-⚡ Versi API Online
+⚡ Versi Stable & Simple
 ━━━━━━━━━━━━━━━━━`
 
         await sock.sendMessage(from, { text: menuText })
@@ -184,158 +176,6 @@ async function startBot() {
       } catch (err) {
         console.error("❌ ERROR PING:", err.message)
         // Don't send error message to user to avoid loop
-      }
-    }
-
-    // ===== BRAT (Text to Sticker via API) =====
-    if (text.toLowerCase().startsWith(".brat ")) {
-      try {
-        // Check connection first
-        if (!isConnected) {
-          return sock.sendMessage(from, {
-            text: "❌ Bot sedang tidak terhubung. Tunggu sebentar..."
-          }).catch(() => console.log("⚠️ Cannot send, bot disconnected"))
-        }
-        
-        const input = text.slice(6).trim()
-
-        if (!input) {
-          return sock.sendMessage(from, {
-            text: "❌ Contoh: .brat halo dunia"
-          })
-        }
-
-        if (input.length > 100) {
-          return sock.sendMessage(from, {
-            text: "❌ Teks maksimal 100 karakter"
-          })
-        }
-
-        console.log("🎨 Membuat brat sticker via API:", input)
-        await sock.sendMessage(from, { text: "⏳ Membuat sticker..." }).catch(() => {})
-
-        // Simple approach: kirim sebagai IMAGE dulu dengan styling
-        // WhatsApp akan otomatis convert size yang pas
-        // Pakai API ImgBB-style simple text image
-        
-        // Encode text untuk URL
-        const text = input.toUpperCase() // Brat style = uppercase
-        const encodedText = encodeURIComponent(text)
-        
-        // API sederhana dari ImgFlip (more reliable)
-        const apiUrl = `https://api.memegen.link/images/custom/_/${encodedText}.png?background=white&font=impact&width=512&height=512`
-        
-        console.log("📡 Fetching from API:", apiUrl)
-        
-        try {
-          const response = await axios.get(apiUrl, {
-            responseType: 'arraybuffer',
-            timeout: 15000,
-            headers: {
-              'User-Agent': 'WhatsApp-Bot/1.0'
-            }
-          })
-
-          const imageBuffer = Buffer.from(response.data)
-          console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
-          
-          // Send as sticker
-          await sock.sendMessage(from, {
-            sticker: imageBuffer
-          })
-          
-          console.log("✅ Sticker berhasil dikirim")
-        } catch (apiError) {
-          console.log("⚠️ API memegen gagal, coba fallback...")
-          
-          // Fallback: Send as TEXT dengan styling
-          const styledText = `🎨 *BRAT STYLE*\n\n*${text}*`
-          await sock.sendMessage(from, { text: styledText })
-          
-          console.log("✅ Sent as styled text (fallback)")
-        }
-
-      } catch (err) {
-        console.error("❌ ERROR BRAT:", err.message)
-        if (isConnected) {
-          sock.sendMessage(from, {
-            text: `❌ Gagal membuat sticker: ${err.message}\n\nCoba lagi dalam beberapa saat.`
-          }).catch(e => console.log("⚠️ Cannot send error msg:", e.message))
-        }
-      }
-    }
-
-    // ===== BRATVID (Animated Text Sticker via API) =====
-    if (text.toLowerCase().startsWith(".bratvid ")) {
-      try {
-        // Check connection first
-        if (!isConnected) {
-          return sock.sendMessage(from, {
-            text: "❌ Bot sedang tidak terhubung. Tunggu sebentar..."
-          }).catch(() => console.log("⚠️ Cannot send, bot disconnected"))
-        }
-        
-        const input = text.slice(9).trim()
-
-        if (!input) {
-          return sock.sendMessage(from, {
-            text: "❌ Contoh: .bratvid halo dunia"
-          })
-        }
-
-        if (input.length > 50) {
-          return sock.sendMessage(from, {
-            text: "❌ Teks maksimal 50 karakter untuk animasi"
-          })
-        }
-
-        console.log("🎬 Membuat animated brat sticker via API:", input)
-        await sock.sendMessage(from, { text: "⏳ Membuat sticker... (versi static)" }).catch(() => {})
-
-        // Animated tanpa ffmpeg = impossible
-        // Jadi kita bikin sticker static dengan cursor effect
-        
-        const text = input.toUpperCase() + " |" // Brat style with cursor
-        const encodedText = encodeURIComponent(text)
-        
-        const apiUrl = `https://api.memegen.link/images/custom/_/${encodedText}.png?background=white&font=impact&width=512&height=512`
-        
-        console.log("📡 Fetching from API:", apiUrl)
-        
-        try {
-          const response = await axios.get(apiUrl, {
-            responseType: 'arraybuffer',
-            timeout: 15000,
-            headers: {
-              'User-Agent': 'WhatsApp-Bot/1.0'
-            }
-          })
-
-          const imageBuffer = Buffer.from(response.data)
-          console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
-          
-          await sock.sendMessage(from, {
-            sticker: imageBuffer
-          })
-          
-          console.log("✅ Sticker berhasil dikirim")
-        } catch (apiError) {
-          console.log("⚠️ API memegen gagal, coba fallback...")
-          
-          // Fallback: Send as TEXT
-          const styledText = `🎨 *BRAT STYLE*\n\n*${input.toUpperCase()}* |`
-          await sock.sendMessage(from, { text: styledText })
-          
-          console.log("✅ Sent as styled text (fallback)")
-        }
-
-      } catch (err) {
-        console.error("❌ ERROR BRATVID:", err.message)
-        if (isConnected) {
-          sock.sendMessage(from, {
-            text: `❌ Gagal membuat sticker animasi: ${err.message}\n\nCoba lagi dalam beberapa saat.`
-          }).catch(e => console.log("⚠️ Cannot send error msg:", e.message))
-        }
       }
     }
 
