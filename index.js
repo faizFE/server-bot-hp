@@ -13,10 +13,35 @@ const {
 // Versi ringan tanpa sharp dan canvas
 // Support: .menu, .ping, .open
 
+// Global variables to persist across reconnections
+let currentSocket = null
+let isStarting = false
+const processedMessages = new Set()
+const MESSAGE_CACHE_SIZE = 200
+
 async function startBot() {
+  // Prevent multiple simultaneous start attempts
+  if (isStarting) {
+    console.log("⏳ Bot sudah dalam proses start, skip...")
+    return
+  }
+  
+  isStarting = true
   try {
     console.log("🔄 Memulai bot...")
     console.log("🌐 BOT SERVER HP - Versi ringan")
+
+    // Cleanup old socket if exists
+    if (currentSocket) {
+      console.log("🧹 Cleaning up old socket...")
+      try {
+        currentSocket.ev.removeAllListeners()
+        currentSocket.end()
+      } catch (e) {
+        console.log("⚠️ Error cleaning socket:", e.message)
+      }
+      currentSocket = null
+    }
 
     const { state, saveCreds } = await useMultiFileAuthState("session")
     const { version } = await fetchLatestBaileysVersion()
@@ -31,16 +56,18 @@ async function startBot() {
       markOnlineOnConnect: true,
       defaultQueryTimeoutMs: 60000,
       keepAliveIntervalMs: 30000,
-      retryRequestDelayMs: 3000
+      retryRequestDelayMs: 3000,
+      getMessage: async (key) => {
+        return { conversation: "Pesan tidak tersedia" }
+      }
     })
     console.log("✅ Socket created")
+    
+    // Store current socket globally
+    currentSocket = sock
 
     // Track connection state
     let isConnected = false
-    
-    // Track processed messages to prevent duplicates
-    const processedMessages = new Set()
-    const MESSAGE_CACHE_SIZE = 100
 
     sock.ev.on("creds.update", saveCreds)
     console.log("✅ Creds listener registered")
@@ -57,14 +84,22 @@ async function startBot() {
       if (connection === "open") {
         console.log("✅ BOT TERHUBUNG!")
         isConnected = true
+        isStarting = false // Bot sudah selesai starting
       }
 
       if (connection === "close") {
         isConnected = false
+        isStarting = false // Reset flag agar bisa restart
+        
         const statusCode = lastDisconnect?.error?.output?.statusCode
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut
         
         console.log("❌ Koneksi terputus:", statusCode)
+        
+        // Clear socket reference
+        if (currentSocket === sock) {
+          currentSocket = null
+        }
         
         // 440 = conflict (multiple devices), tunggu lebih lama
         if (statusCode === 440) {
@@ -92,6 +127,13 @@ async function startBot() {
       const msg = messages[0]
       if (!msg.message) return
       
+      // Skip old messages (older than 5 minutes)
+      const messageAge = Date.now() - (msg.messageTimestamp * 1000)
+      if (messageAge > 5 * 60 * 1000) {
+        console.log("⏭️  Skip: Pesan lama (> 5 menit)")
+        return
+      }
+      
       // Generate unique message ID
       const messageId = msg.key.id
       
@@ -115,6 +157,12 @@ async function startBot() {
       // ✅ FILTER: Hanya respond ke private chat (skip grup)
       if (from.endsWith("@g.us")) {
         console.log("⏭️  Skip: Pesan dari grup")
+        return
+      }
+      
+      // Check if bot is connected before processing
+      if (!isConnected) {
+        console.log("⏭️  Skip: Bot tidak terhubung")
         return
       }
       
@@ -358,8 +406,9 @@ async function startBot() {
     }
     } catch (err) {
       // Handle session errors (Bad MAC, etc) without crashing
-      if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt')) {
-        console.error("⚠️ Session error (Bad MAC) - Pesan dari session lama, skip")
+      if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt') || err.message?.includes('ETIMEDOUT')) {
+        console.error("⚠️ Session/Network error - Skip pesan:", err.message)
+        // Don't process this message, just continue
       } else {
         console.error("❌ ERROR messages.upsert:", err.message)
       }
@@ -367,25 +416,57 @@ async function startBot() {
     })
     console.log("✅ Messages listener registered")
     console.log("✅ Bot siap!")
+    
+    isStarting = false // Mark as finished starting
   
   } catch (error) {
+    isStarting = false // Reset flag on error
+    
     console.error("❌ ERROR FATAL:", error)
     console.error("Stack trace:", error.stack)
-    console.log("🔄 Retry dalam 5 detik...")
-    setTimeout(() => startBot(), 5000)
+    
+    // Handle specific errors
+    if (error.message?.includes('Cannot find module') || error.message?.includes('ENOENT')) {
+      console.log("❌ File/module tidak ditemukan. Pastikan semua dependencies terinstall.")
+      console.log("Jalankan: npm install")
+      return
+    }
+    
+    if (error.message?.includes('ECONNREFUSED') || error.message?.includes('ETIMEDOUT')) {
+      console.log("⚠️ Masalah koneksi internet. Cek koneksi kamu.")
+    }
+    
+    console.log("🔄 Retry dalam 10 detik...")
+    setTimeout(() => startBot(), 10000)
   }
 }
 
 // WAJIB ADA
 process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err)
-  console.error('Stack:', err.stack)
-  console.log("🔄 Mencoba restart...")
-  setTimeout(() => startBot(), 5000)
+  console.error('💥 Uncaught Exception:', err.message)
+  
+  // Handle specific errors
+  if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt')) {
+    console.log("⚠️ Session error detected, bot akan continue...")
+    return // Don't restart for session errors
+  }
+  
+  if (!isStarting) {
+    console.log("🔄 Mencoba restart...")
+    setTimeout(() => startBot(), 10000)
+  }
 })
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('💥 Unhandled Rejection:', reason)
+  const errorMsg = reason?.message || String(reason)
+  console.error('💥 Unhandled Rejection:', errorMsg)
+  
+  // Handle specific errors
+  if (errorMsg?.includes('Bad MAC') || errorMsg?.includes('decrypt') || errorMsg?.includes('ETIMEDOUT')) {
+    console.log("⚠️ Session/Network error, bot tetap berjalan...")
+    return // Don't restart
+  }
+  
   console.log("🔄 Bot akan tetap berjalan...")
 })
 
