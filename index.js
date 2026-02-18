@@ -193,9 +193,9 @@ async function startBot() {
         const encodedText = encodeURIComponent(input).replace(/%20/g, '+')
         
         // API untuk generate brat-style image
-        // Menggunakan fakeimg.pl - more reliable
-        // Format: white background (#ffffff), black text (#000000), bold font
-        const apiUrl = `https://fakeimg.pl/512x512/ffffff/000000/?text=${encodedText}&font=bebas&font_size=80`
+        // Menggunakan placeholder.com - more reliable and fast
+        // Format: white background, black text, bold font
+        const apiUrl = `https://via.placeholder.com/512x512/ffffff/000000?text=${encodedText}`
         
         console.log("📡 Fetching from API:", apiUrl)
         
@@ -264,7 +264,7 @@ async function startBot() {
         const encodedWithCursor = encodeURIComponent(textWithCursor).replace(/%20/g, '+')
         
         // Generate final static sticker
-        const apiUrl = `https://fakeimg.pl/512x512/ffffff/000000/?text=${encodedWithCursor}&font=bebas&font_size=80`
+        const apiUrl = `https://via.placeholder.com/512x512/ffffff/000000?text=${encodedWithCursor}`
         
         console.log("📡 Fetching from API:", apiUrl)
         
