@@ -38,6 +38,10 @@ async function startBot() {
 
     // Track connection state
     let isConnected = false
+    
+    // Track processed messages to prevent duplicates
+    const processedMessages = new Set()
+    const MESSAGE_CACHE_SIZE = 100
 
     sock.ev.on("creds.update", saveCreds)
     console.log("✅ Creds listener registered")
@@ -88,6 +92,24 @@ async function startBot() {
     try {
       const msg = messages[0]
       if (!msg.message) return
+      
+      // Generate unique message ID
+      const messageId = msg.key.id
+      
+      // Check if already processed (prevent duplicates)
+      if (processedMessages.has(messageId)) {
+        console.log("⏭️  Skip: Already processed", messageId)
+        return
+      }
+      
+      // Add to processed cache
+      processedMessages.add(messageId)
+      
+      // Limit cache size
+      if (processedMessages.size > MESSAGE_CACHE_SIZE) {
+        const firstItem = processedMessages.values().next().value
+        processedMessages.delete(firstItem)
+      }
 
       const from = msg.key.remoteJid
       
@@ -97,7 +119,7 @@ async function startBot() {
         return
       }
       
-      console.log("📩 FROM:", from)
+      console.log("📩 FROM:", from, "| ID:", messageId)
 
       const text =
         msg.message?.conversation ||
@@ -192,50 +214,46 @@ async function startBot() {
         console.log("🎨 Membuat brat sticker via API:", input)
         await sock.sendMessage(from, { text: "⏳ Membuat sticker..." }).catch(() => {})
 
-        // Encode text untuk URL - escape special chars
-        const encodedText = encodeURIComponent(input)
+        // Simple approach: kirim sebagai IMAGE dulu dengan styling
+        // WhatsApp akan otomatis convert size yang pas
+        // Pakai API ImgBB-style simple text image
         
-        // API untuk generate text image - menggunakan placehold.co
-        // Format: PNG, 512x512, white background, black text
-        const apiUrl = `https://placehold.co/512x512/ffffff/000000/png?text=${encodedText}&font=roboto`
+        // Encode text untuk URL
+        const text = input.toUpperCase() // Brat style = uppercase
+        const encodedText = encodeURIComponent(text)
+        
+        // API sederhana dari ImgFlip (more reliable)
+        const apiUrl = `https://api.memegen.link/images/custom/_/${encodedText}.png?background=white&font=impact&width=512&height=512`
         
         console.log("📡 Fetching from API:", apiUrl)
         
-        // Download image dari API dengan retry
-        let response
-        let attempts = 0
-        const maxAttempts = 3
-        
-        while (attempts < maxAttempts) {
-          try {
-            response = await axios.get(apiUrl, {
-              responseType: 'arraybuffer',
-              timeout: 20000,
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'image/png, image/jpeg, image/*'
-              },
-              validateStatus: (status) => status === 200
-            })
-            break
-          } catch (err) {
-            attempts++
-            if (attempts >= maxAttempts) throw err
-            console.log(`⚠️ Retry ${attempts}/${maxAttempts}...`)
-            await new Promise(r => setTimeout(r, 2000))
-          }
-        }
+        try {
+          const response = await axios.get(apiUrl, {
+            responseType: 'arraybuffer',
+            timeout: 15000,
+            headers: {
+              'User-Agent': 'WhatsApp-Bot/1.0'
+            }
+          })
 
-        const imageBuffer = Buffer.from(response.data)
-        
-        console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
-        
-        // Send as sticker
-        await sock.sendMessage(from, {
-          sticker: imageBuffer
-        })
-        
-        console.log("✅ Sticker berhasil dikirim")
+          const imageBuffer = Buffer.from(response.data)
+          console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
+          
+          // Send as sticker
+          await sock.sendMessage(from, {
+            sticker: imageBuffer
+          })
+          
+          console.log("✅ Sticker berhasil dikirim")
+        } catch (apiError) {
+          console.log("⚠️ API memegen gagal, coba fallback...")
+          
+          // Fallback: Send as TEXT dengan styling
+          const styledText = `🎨 *BRAT STYLE*\n\n*${text}*`
+          await sock.sendMessage(from, { text: styledText })
+          
+          console.log("✅ Sent as styled text (fallback)")
+        }
 
       } catch (err) {
         console.error("❌ ERROR BRAT:", err.message)
@@ -272,55 +290,44 @@ async function startBot() {
         }
 
         console.log("🎬 Membuat animated brat sticker via API:", input)
-        await sock.sendMessage(from, { text: "⏳ Membuat sticker animasi... (tunggu sebentar)" }).catch(() => {})
+        await sock.sendMessage(from, { text: "⏳ Membuat sticker... (versi static)" }).catch(() => {})
 
-        // Encode text
-        const encodedText = encodeURIComponent(input)
+        // Animated tanpa ffmpeg = impossible
+        // Jadi kita bikin sticker static dengan cursor effect
         
-        // Karena tidak bisa buat animated tanpa ffmpeg,
-        // kita bikin sticker static tapi dengan efek typing cursor
-        const textWithCursor = input + " |"
-        const encodedWithCursor = encodeURIComponent(textWithCursor)
+        const text = input.toUpperCase() + " |" // Brat style with cursor
+        const encodedText = encodeURIComponent(text)
         
-        // Generate final static sticker
-        const apiUrl = `https://placehold.co/512x512/ffffff/000000/png?text=${encodedWithCursor}&font=roboto`
+        const apiUrl = `https://api.memegen.link/images/custom/_/${encodedText}.png?background=white&font=impact&width=512&height=512`
         
         console.log("📡 Fetching from API:", apiUrl)
         
-        // Download image dari API dengan retry
-        let response
-        let attempts = 0
-        const maxAttempts = 3
-        
-        while (attempts < maxAttempts) {
-          try {
-            response = await axios.get(apiUrl, {
-              responseType: 'arraybuffer',
-              timeout: 20000,
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'image/png, image/jpeg, image/*'
-              },
-              validateStatus: (status) => status === 200
-            })
-            break
-          } catch (err) {
-            attempts++
-            if (attempts >= maxAttempts) throw err
-            console.log(`⚠️ Retry ${attempts}/${maxAttempts}...`)
-            await new Promise(r => setTimeout(r, 2000))
-          }
+        try {
+          const response = await axios.get(apiUrl, {
+            responseType: 'arraybuffer',
+            timeout: 15000,
+            headers: {
+              'User-Agent': 'WhatsApp-Bot/1.0'
+            }
+          })
+
+          const imageBuffer = Buffer.from(response.data)
+          console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
+          
+          await sock.sendMessage(from, {
+            sticker: imageBuffer
+          })
+          
+          console.log("✅ Sticker berhasil dikirim")
+        } catch (apiError) {
+          console.log("⚠️ API memegen gagal, coba fallback...")
+          
+          // Fallback: Send as TEXT
+          const styledText = `🎨 *BRAT STYLE*\n\n*${input.toUpperCase()}* |`
+          await sock.sendMessage(from, { text: styledText })
+          
+          console.log("✅ Sent as styled text (fallback)")
         }
-
-        const imageBuffer = Buffer.from(response.data)
-        
-        console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
-
-        await sock.sendMessage(from, {
-          sticker: imageBuffer
-        })
-        
-        console.log("✅ Animated sticker berhasil dikirim")
 
       } catch (err) {
         console.error("❌ ERROR BRATVID:", err.message)
