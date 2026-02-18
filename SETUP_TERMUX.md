@@ -250,7 +250,41 @@ pm2 restart wa-bot
 # Scan QR lagi
 ```
 
-### **2. npm install error**
+### **2. MAC Error / bad Mac (PENTING!)**
+Error ini muncul saat bot coba kirim pesan tapi koneksi bermasalah.
+
+**Solusi:**
+```bash
+# A. Cek status bot
+pm2 logs wa-bot
+
+# B. Restart bot
+pm2 restart wa-bot
+
+# C. Kalau masih error, hapus session dan scan QR lagi
+cd server-bot-hp
+pm2 stop wa-bot
+rm -rf session
+pm2 start wa-bot
+# Scan QR code yang muncul
+
+# D. Pastikan koneksi internet stabil
+ping google.com
+```
+
+**Penyebab:**
+- Session WhatsApp corrupt
+- Bot disconnect tapi masih terima pesan
+- Koneksi internet tidak stabil
+- WhatsApp logout dari Linked Devices
+
+**Pencegahan:**
+- Jangan logout WhatsApp dari Linked Devices
+- Pastikan internet stabil
+- Jangan hapus folder `session`
+- Lock Termux di Recent Apps
+
+### **3. npm install error**
 ```bash
 # Clear cache dan install ulang
 npm cache clean --force

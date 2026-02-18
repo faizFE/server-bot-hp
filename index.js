@@ -146,12 +146,32 @@ async function startBot() {
 
     // ===== PING =====
     if (text.toLowerCase() === ".ping") {
-      await sock.sendMessage(from, { text: "✅ Halo aku FaizBot! Ada yang bisa saya bantu?" })
+      try {
+        // Check connection first
+        if (!isConnected) {
+          console.log("⚠️ Bot not connected, skipping ping")
+          return
+        }
+        
+        await sock.sendMessage(from, { 
+          text: "✅ Halo aku FaizBot! Ada yang bisa saya bantu?" 
+        })
+      } catch (err) {
+        console.error("❌ ERROR PING:", err.message)
+        // Don't send error message to user to avoid loop
+      }
     }
 
     // ===== BRAT (Text to Sticker via API) =====
     if (text.toLowerCase().startsWith(".brat ")) {
       try {
+        // Check connection first
+        if (!isConnected) {
+          return sock.sendMessage(from, {
+            text: "❌ Bot sedang tidak terhubung. Tunggu sebentar..."
+          }).catch(() => console.log("⚠️ Cannot send, bot disconnected"))
+        }
+        
         const input = text.slice(6).trim()
 
         if (!input) {
@@ -200,15 +220,24 @@ async function startBot() {
 
       } catch (err) {
         console.error("❌ ERROR BRAT:", err.message)
-        await sock.sendMessage(from, {
-          text: `❌ Gagal membuat sticker: ${err.message}\n\nCoba lagi dalam beberapa saat.`
-        })
+        if (isConnected) {
+          sock.sendMessage(from, {
+            text: `❌ Gagal membuat sticker: ${err.message}\n\nCoba lagi dalam beberapa saat.`
+          }).catch(e => console.log("⚠️ Cannot send error msg:", e.message))
+        }
       }
     }
 
     // ===== BRATVID (Animated Text Sticker via API) =====
     if (text.toLowerCase().startsWith(".bratvid ")) {
       try {
+        // Check connection first
+        if (!isConnected) {
+          return sock.sendMessage(from, {
+            text: "❌ Bot sedang tidak terhubung. Tunggu sebentar..."
+          }).catch(() => console.log("⚠️ Cannot send, bot disconnected"))
+        }
+        
         const input = text.slice(9).trim()
 
         if (!input) {
@@ -260,9 +289,11 @@ async function startBot() {
 
       } catch (err) {
         console.error("❌ ERROR BRATVID:", err.message)
-        await sock.sendMessage(from, {
-          text: `❌ Gagal membuat sticker animasi: ${err.message}\n\nCoba lagi dalam beberapa saat.`
-        })
+        if (isConnected) {
+          sock.sendMessage(from, {
+            text: `❌ Gagal membuat sticker animasi: ${err.message}\n\nCoba lagi dalam beberapa saat.`
+          }).catch(e => console.log("⚠️ Cannot send error msg:", e.message))
+        }
       }
     }
 
