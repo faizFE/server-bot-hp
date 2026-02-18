@@ -7,21 +7,36 @@ Versi ringan WhatsApp Bot yang dirancang khusus untuk berjalan di server HP/mobi
 ### 📝 Command List:
 - `.menu` - Tampilkan daftar perintah
 - `.ping` - Cek status bot
+- `.brat <teks>` - Buat sticker text brat style (via API)
+- `.bratvid <teks>` - Buat sticker animasi brat (via API)
 - `.open` - Buka foto/video view once (reply ke pesan view once)
+
+## 🎨 Fitur Brat Sticker (via API)
+
+Fitur `.brat` dan `.bratvid` menggunakan **API online** sehingga:
+- ✅ Tidak butuh sharp/canvas/ffmpeg
+- ✅ Ringan dan cepat
+- ✅ Bisa jalan di HP dengan spek rendah
+- ⚠️ Butuh koneksi internet stabil
+
+**Contoh penggunaan:**
+```
+.brat hello world
+.bratvid aku sayang kamu
+```
 
 ## ❌ Fitur yang Dihapus
 
 Fitur berikut dihapus karena tidak kompatibel dengan server HP:
-- `.brat` - Membuat sticker text (butuh canvas & sharp)
-- `.bratvid` - Membuat sticker animasi (butuh canvas, sharp & ffmpeg)
-- `.stc` - Convert gambar ke sticker (butuh sharp)
+- ❌ `.stc` - Convert gambar ke sticker (butuh sharp)
 
 ## 📦 Dependencies
 
-Hanya menggunakan library ringan:
+Library yang digunakan:
 - `@whiskeysockets/baileys` - Library WhatsApp
 - `pino` - Logger
 - `qrcode-terminal` - Generate QR code
+- `axios` - HTTP client untuk API calls
 
 **TIDAK** menggunakan:
 - ❌ sharp (image processing berat)

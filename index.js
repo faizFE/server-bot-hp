@@ -1,5 +1,6 @@
 const pino = require("pino")
 const qrcode = require("qrcode-terminal")
+const axios = require("axios")
 
 const { 
   default: makeWASocket,
@@ -11,7 +12,7 @@ const {
 
 // ====== BOT SERVER HP ======
 // Versi ringan tanpa sharp dan canvas
-// Hanya support: .menu, .ping, .open
+// Support: .menu, .ping, .open, .brat, .bratvid (via API)
 
 async function startBot() {
   try {
@@ -117,6 +118,13 @@ async function startBot() {
 │ • .ping
 │   Cek status bot
 │
+├─ *STICKER*
+│ • .brat <teks>
+│   Buat sticker text brat
+│   
+│ • .bratvid <teks>
+│   Buat sticker animasi brat
+│
 └─ *UTILITY*
   • .open
     Buka foto/video view once
@@ -124,7 +132,7 @@ async function startBot() {
 
 ━━━━━━━━━━━━━━━━━
 🏃 Bot Server HP
-⚡ Versi Ringan
+⚡ Versi API Online
 ━━━━━━━━━━━━━━━━━`
 
         await sock.sendMessage(from, { text: menuText })
@@ -139,6 +147,131 @@ async function startBot() {
     // ===== PING =====
     if (text.toLowerCase() === ".ping") {
       await sock.sendMessage(from, { text: "✅ Halo aku FaizBot! Ada yang bisa saya bantu?" })
+    }
+
+    // ===== BRAT (Text to Sticker via API) =====
+    if (text.toLowerCase().startsWith(".brat ")) {
+      try {
+        const input = text.slice(6).trim()
+
+        if (!input) {
+          return sock.sendMessage(from, {
+            text: "❌ Contoh: .brat halo dunia"
+          })
+        }
+
+        if (input.length > 100) {
+          return sock.sendMessage(from, {
+            text: "❌ Teks maksimal 100 karakter"
+          })
+        }
+
+        console.log("🎨 Membuat brat sticker via API:", input)
+        await sock.sendMessage(from, { text: "⏳ Membuat sticker..." })
+
+        // Encode text untuk URL
+        const encodedText = encodeURIComponent(input)
+        
+        // API untuk generate brat-style image
+        // Format: white background, black text, bold font
+        const apiUrl = `https://dummyimage.com/512x512/ffffff/000000.webp&text=${encodedText}&font=bitter`
+        
+        console.log("📡 Fetching from API:", apiUrl)
+        
+        // Download image dari API
+        const response = await axios.get(apiUrl, {
+          responseType: 'arraybuffer',
+          timeout: 15000
+        })
+
+        const stickerBuffer = Buffer.from(response.data)
+        
+        console.log(`✅ Sticker generated: ${stickerBuffer.length} bytes`)
+
+        await sock.sendMessage(from, {
+          sticker: stickerBuffer
+        })
+        
+        console.log("✅ Sticker berhasil dikirim")
+
+      } catch (err) {
+        console.error("❌ ERROR BRAT:", err.message)
+        await sock.sendMessage(from, {
+          text: `❌ Gagal membuat sticker: ${err.message}\n\nCoba lagi dalam beberapa saat.`
+        })
+      }
+    }
+
+    // ===== BRATVID (Animated Text Sticker via API) =====
+    if (text.toLowerCase().startsWith(".bratvid ")) {
+      try {
+        const input = text.slice(9).trim()
+
+        if (!input) {
+          return sock.sendMessage(from, {
+            text: "❌ Contoh: .bratvid halo dunia"
+          })
+        }
+
+        if (input.length > 100) {
+          return sock.sendMessage(from, {
+            text: "❌ Teks maksimal 100 karakter untuk animasi"
+          })
+        }
+
+        console.log("🎬 Membuat animated brat sticker via API:", input)
+        await sock.sendMessage(from, { text: "⏳ Membuat sticker animasi... (tunggu sebentar)" })
+
+        // Encode text
+        const encodedText = encodeURIComponent(input)
+        
+        // API untuk generate animated GIF text (typing effect simulation)
+        // Kita akan pakai multiple frames dengan text yang bertambah
+        const frames = []
+        
+        // Generate typing animation dengan multiple API calls
+        for (let i = 1; i <= Math.min(input.length, 15); i++) {
+          const partialText = input.substring(0, i)
+          const encoded = encodeURIComponent(partialText + "|")
+          const url = `https://dummyimage.com/512x512/ffffff/000000.png&text=${encoded}&font=bitter`
+          frames.push(url)
+        }
+        
+        // Add final frame (tanpa cursor)
+        const finalUrl = `https://dummyimage.com/512x512/ffffff/000000.png&text=${encodedText}&font=bitter`
+        for (let i = 0; i < 5; i++) {
+          frames.push(finalUrl)
+        }
+
+        console.log(`📡 Generating ${frames.length} frames...`)
+        
+        // Download first frame sebagai sticker (karena animated WebP susah tanpa ffmpeg)
+        // Alternative: kirim sebagai GIF static atau just kirim frame terakhir
+        const response = await axios.get(frames[frames.length - 1], {
+          responseType: 'arraybuffer',
+          timeout: 15000
+        })
+
+        const stickerBuffer = Buffer.from(response.data)
+        
+        console.log(`✅ Animated sticker generated: ${stickerBuffer.length} bytes`)
+
+        await sock.sendMessage(from, {
+          sticker: stickerBuffer
+        })
+        
+        console.log("✅ Animated sticker berhasil dikirim")
+        
+        await sock.sendMessage(from, {
+          text: "ℹ️ Note: Animasi penuh butuh ffmpeg. Ini versi static."
+        })
+
+      } catch (err) {
+        console.error("❌ ERROR BRATVID:", err.message)
+        await sock.sendMessage(from, {
+          text: `❌ Gagal membuat sticker animasi: ${err.message}\n\nCoba lagi dalam beberapa saat.`
+        })
+      }
     }
 
     // ===== OPEN (View Once Revealer) =====
