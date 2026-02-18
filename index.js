@@ -58,8 +58,13 @@ async function startBot() {
       keepAliveIntervalMs: 30000,
       retryRequestDelayMs: 3000,
       getMessage: async (key) => {
-        return { conversation: "Pesan tidak tersedia" }
-      }
+        // Return dummy message to prevent decrypt errors
+        return { 
+          conversation: "Pesan tidak tersedia" 
+        }
+      },
+      shouldIgnoreJid: (jid) => false,
+      syncFullHistory: false
     })
     console.log("✅ Socket created")
     
@@ -69,7 +74,14 @@ async function startBot() {
     // Track connection state
     let isConnected = false
 
-    sock.ev.on("creds.update", saveCreds)
+    // Handle creds update with error catching
+    sock.ev.on("creds.update", async () => {
+      try {
+        await saveCreds()
+      } catch (err) {
+        console.error("⚠️ Error saving creds:", err.message)
+      }
+    })
     console.log("✅ Creds listener registered")
 
     sock.ev.on("connection.update", (update) => {
@@ -120,6 +132,21 @@ async function startBot() {
       }
     })
     console.log("✅ Connection listener registered")
+
+    // Global error handler for socket
+    sock.ev.on("error", (err) => {
+      const errorMsg = err.message?.toLowerCase() || ''
+      
+      if (errorMsg.includes('decrypt') || 
+          errorMsg.includes('failed to decrypt') ||
+          errorMsg.includes('bad mac') ||
+          errorMsg.includes('session')) {
+        console.error("⚠️ Socket decrypt error (akan di-skip):", err.message)
+        // Don't crash, just log and continue
+      } else {
+        console.error("❌ Socket error:", err.message)
+      }
+    })
 
     // ✅ LISTENER MESSAGES
     sock.ev.on("messages.upsert", async ({ messages }) => {
@@ -405,8 +432,14 @@ async function startBot() {
       }
     }
     } catch (err) {
-      // Handle session errors (Bad MAC, etc) without crashing
-      if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt') || err.message?.includes('ETIMEDOUT')) {
+      // Handle session errors (Bad MAC, decrypt errors, etc) without crashing
+      const errorMsg = err.message?.toLowerCase() || ''
+      
+      if (errorMsg.includes('bad mac') || 
+          errorMsg.includes('decrypt') || 
+          errorMsg.includes('failed to decrypt') ||
+          errorMsg.includes('etimedout') ||
+          errorMsg.includes('session')) {
         console.error("⚠️ Session/Network error - Skip pesan:", err.message)
         // Don't process this message, just continue
       } else {
@@ -443,10 +476,14 @@ async function startBot() {
 
 // WAJIB ADA
 process.on('uncaughtException', (err) => {
+  const errorMsg = err.message?.toLowerCase() || ''
   console.error('💥 Uncaught Exception:', err.message)
   
-  // Handle specific errors
-  if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt')) {
+  // Handle specific errors that should not cause restart
+  if (errorMsg.includes('bad mac') || 
+      errorMsg.includes('decrypt') || 
+      errorMsg.includes('failed to decrypt') ||
+      errorMsg.includes('session')) {
     console.log("⚠️ Session error detected, bot akan continue...")
     return // Don't restart for session errors
   }
@@ -458,11 +495,15 @@ process.on('uncaughtException', (err) => {
 })
 
 process.on('unhandledRejection', (reason, promise) => {
-  const errorMsg = reason?.message || String(reason)
-  console.error('💥 Unhandled Rejection:', errorMsg)
+  const errorMsg = (reason?.message || String(reason)).toLowerCase()
+  console.error('💥 Unhandled Rejection:', reason?.message || String(reason))
   
-  // Handle specific errors
-  if (errorMsg?.includes('Bad MAC') || errorMsg?.includes('decrypt') || errorMsg?.includes('ETIMEDOUT')) {
+  // Handle specific errors that should not cause restart
+  if (errorMsg.includes('bad mac') || 
+      errorMsg.includes('decrypt') || 
+      errorMsg.includes('failed to decrypt') ||
+      errorMsg.includes('etimedout') ||
+      errorMsg.includes('session')) {
     console.log("⚠️ Session/Network error, bot tetap berjalan...")
     return // Don't restart
   }
