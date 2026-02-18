@@ -26,10 +26,13 @@ async function startBot() {
     const sock = makeWASocket({
       version,
       auth: state,
-      logger: pino({ level: "fatal" }),
+      logger: pino({ level: "silent" }),
       printQRInTerminal: false,
       syncFullHistory: false,
-      markOnlineOnConnect: true
+      markOnlineOnConnect: true,
+      defaultQueryTimeoutMs: 60000,
+      keepAliveIntervalMs: 30000,
+      retryRequestDelayMs: 3000
     })
     console.log("✅ Socket created")
 
@@ -82,28 +85,28 @@ async function startBot() {
 
     // ✅ LISTENER MESSAGES
     sock.ev.on("messages.upsert", async ({ messages }) => {
+    try {
+      const msg = messages[0]
+      if (!msg.message) return
 
-    const msg = messages[0]
-    if (!msg.message) return
+      const from = msg.key.remoteJid
+      
+      // ✅ FILTER: Hanya respond ke private chat (skip grup)
+      if (from.endsWith("@g.us")) {
+        console.log("⏭️  Skip: Pesan dari grup")
+        return
+      }
+      
+      console.log("📩 FROM:", from)
 
-    const from = msg.key.remoteJid
-    
-    // ✅ FILTER: Hanya respond ke private chat (skip grup)
-    if (from.endsWith("@g.us")) {
-      console.log("⏭️  Skip: Pesan dari grup")
-      return
-    }
-    
-    console.log("📩 FROM:", from)
+      const text =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        msg.message?.imageMessage?.caption ||
+        msg.message?.videoMessage?.caption ||
+        ""
 
-    const text =
-      msg.message?.conversation ||
-      msg.message?.extendedTextMessage?.text ||
-      msg.message?.imageMessage?.caption ||
-      msg.message?.videoMessage?.caption ||
-      ""
-
-    if (!text) return
+      if (!text) return
 
     // ===== MENU =====
     if (text.toLowerCase() === ".menu") {
@@ -187,26 +190,40 @@ async function startBot() {
         }
 
         console.log("🎨 Membuat brat sticker via API:", input)
-        await sock.sendMessage(from, { text: "⏳ Membuat sticker..." })
+        await sock.sendMessage(from, { text: "⏳ Membuat sticker..." }).catch(() => {})
 
-        // Encode text untuk URL (replace spaces dengan +)
-        const encodedText = encodeURIComponent(input).replace(/%20/g, '+')
+        // Encode text untuk URL
+        const encodedText = encodeURIComponent(input)
         
-        // API untuk generate brat-style image
-        // Menggunakan placeholder.com - more reliable and fast
-        // Format: white background, black text, bold font
-        const apiUrl = `https://via.placeholder.com/512x512/ffffff/000000?text=${encodedText}`
+        // API untuk generate text image - menggunakan dummyjson.com/image
+        // Format: 512x512, white background, black text
+        const apiUrl = `https://dummyjson.com/image/512x512/ffffff/000000?text=${encodedText}&fontFamily=arial&fontSize=50`
         
         console.log("📡 Fetching from API:", apiUrl)
         
-        // Download image dari API
-        const response = await axios.get(apiUrl, {
-          responseType: 'arraybuffer',
-          timeout: 15000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0'
+        // Download image dari API dengan retry
+        let response
+        let attempts = 0
+        const maxAttempts = 3
+        
+        while (attempts < maxAttempts) {
+          try {
+            response = await axios.get(apiUrl, {
+              responseType: 'arraybuffer',
+              timeout: 20000,
+              headers: {
+                'User-Agent': 'WhatsApp Bot',
+                'Accept': 'image/*'
+              }
+            })
+            break
+          } catch (err) {
+            attempts++
+            if (attempts >= maxAttempts) throw err
+            console.log(`⚠️ Retry ${attempts}/${maxAttempts}...`)
+            await new Promise(r => setTimeout(r, 2000))
           }
-        })
+        }
 
         const stickerBuffer = Buffer.from(response.data)
         
@@ -253,29 +270,44 @@ async function startBot() {
         }
 
         console.log("🎬 Membuat animated brat sticker via API:", input)
-        await sock.sendMessage(from, { text: "⏳ Membuat sticker animasi... (tunggu sebentar)" })
+        await sock.sendMessage(from, { text: "⏳ Membuat sticker animasi... (tunggu sebentar)" }).catch(() => {})
 
-        // Encode text (replace spaces dengan +)
-        const encodedText = encodeURIComponent(input).replace(/%20/g, '+')
+        // Encode text
+        const encodedText = encodeURIComponent(input)
         
         // Karena tidak bisa buat animated tanpa ffmpeg,
         // kita bikin sticker static tapi dengan efek typing cursor
-        const textWithCursor = input + " |"
-        const encodedWithCursor = encodeURIComponent(textWithCursor).replace(/%20/g, '+')
+        const textWithCursor = input + " ||"
+        const encodedWithCursor = encodeURIComponent(textWithCursor)
         
         // Generate final static sticker
-        const apiUrl = `https://via.placeholder.com/512x512/ffffff/000000?text=${encodedWithCursor}`
+        const apiUrl = `https://dummyjson.com/image/512x512/ffffff/000000?text=${encodedWithCursor}&fontFamily=arial&fontSize=50`
         
         console.log("📡 Fetching from API:", apiUrl)
         
-        // Download image dari API
-        const response = await axios.get(apiUrl, {
-          responseType: 'arraybuffer',
-          timeout: 15000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0'
+        // Download image dari API dengan retry
+        let response
+        let attempts = 0
+        const maxAttempts = 3
+        
+        while (attempts < maxAttempts) {
+          try {
+            response = await axios.get(apiUrl, {
+              responseType: 'arraybuffer',
+              timeout: 20000,
+              headers: {
+                'User-Agent': 'WhatsApp Bot',
+                'Accept': 'image/*'
+              }
+            })
+            break
+          } catch (err) {
+            attempts++
+            if (attempts >= maxAttempts) throw err
+            console.log(`⚠️ Retry ${attempts}/${maxAttempts}...`)
+            await new Promise(r => setTimeout(r, 2000))
           }
-        })
+        }
 
         const stickerBuffer = Buffer.from(response.data)
         
@@ -472,6 +504,14 @@ async function startBot() {
         } else {
           console.log("⚠️ Bot tidak terhubung, tidak bisa kirim pesan error")
         }
+      }
+    }
+    } catch (err) {
+      // Handle session errors (Bad MAC, etc) without crashing
+      if (err.message?.includes('Bad MAC') || err.message?.includes('decrypt')) {
+        console.error("⚠️ Session error (Bad MAC) - Pesan dari session lama, skip")
+      } else {
+        console.error("❌ ERROR messages.upsert:", err.message)
       }
     }
     })
