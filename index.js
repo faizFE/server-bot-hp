@@ -192,12 +192,12 @@ async function startBot() {
         console.log("🎨 Membuat brat sticker via API:", input)
         await sock.sendMessage(from, { text: "⏳ Membuat sticker..." }).catch(() => {})
 
-        // Encode text untuk URL
+        // Encode text untuk URL - escape special chars
         const encodedText = encodeURIComponent(input)
         
-        // API untuk generate text image - menggunakan dummyjson.com/image
-        // Format: 512x512, white background, black text
-        const apiUrl = `https://dummyjson.com/image/512x512/ffffff/000000?text=${encodedText}&fontFamily=arial&fontSize=50`
+        // API untuk generate text image - menggunakan placehold.co
+        // Format: PNG, 512x512, white background, black text
+        const apiUrl = `https://placehold.co/512x512/ffffff/000000/png?text=${encodedText}&font=roboto`
         
         console.log("📡 Fetching from API:", apiUrl)
         
@@ -212,9 +212,10 @@ async function startBot() {
               responseType: 'arraybuffer',
               timeout: 20000,
               headers: {
-                'User-Agent': 'WhatsApp Bot',
-                'Accept': 'image/*'
-              }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'image/png, image/jpeg, image/*'
+              },
+              validateStatus: (status) => status === 200
             })
             break
           } catch (err) {
@@ -225,12 +226,13 @@ async function startBot() {
           }
         }
 
-        const stickerBuffer = Buffer.from(response.data)
+        const imageBuffer = Buffer.from(response.data)
         
-        console.log(`✅ Sticker generated: ${stickerBuffer.length} bytes`)
-
+        console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
+        
+        // Send as sticker
         await sock.sendMessage(from, {
-          sticker: stickerBuffer
+          sticker: imageBuffer
         })
         
         console.log("✅ Sticker berhasil dikirim")
@@ -277,11 +279,11 @@ async function startBot() {
         
         // Karena tidak bisa buat animated tanpa ffmpeg,
         // kita bikin sticker static tapi dengan efek typing cursor
-        const textWithCursor = input + " ||"
+        const textWithCursor = input + " |"
         const encodedWithCursor = encodeURIComponent(textWithCursor)
         
         // Generate final static sticker
-        const apiUrl = `https://dummyjson.com/image/512x512/ffffff/000000?text=${encodedWithCursor}&fontFamily=arial&fontSize=50`
+        const apiUrl = `https://placehold.co/512x512/ffffff/000000/png?text=${encodedWithCursor}&font=roboto`
         
         console.log("📡 Fetching from API:", apiUrl)
         
@@ -296,9 +298,10 @@ async function startBot() {
               responseType: 'arraybuffer',
               timeout: 20000,
               headers: {
-                'User-Agent': 'WhatsApp Bot',
-                'Accept': 'image/*'
-              }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'image/png, image/jpeg, image/*'
+              },
+              validateStatus: (status) => status === 200
             })
             break
           } catch (err) {
@@ -309,12 +312,12 @@ async function startBot() {
           }
         }
 
-        const stickerBuffer = Buffer.from(response.data)
+        const imageBuffer = Buffer.from(response.data)
         
-        console.log(`✅ Animated sticker generated: ${stickerBuffer.length} bytes`)
+        console.log(`✅ Image downloaded: ${imageBuffer.length} bytes`)
 
         await sock.sendMessage(from, {
-          sticker: stickerBuffer
+          sticker: imageBuffer
         })
         
         console.log("✅ Animated sticker berhasil dikirim")
