@@ -169,19 +169,23 @@ async function startBot() {
         console.log("🎨 Membuat brat sticker via API:", input)
         await sock.sendMessage(from, { text: "⏳ Membuat sticker..." })
 
-        // Encode text untuk URL
-        const encodedText = encodeURIComponent(input)
+        // Encode text untuk URL (replace spaces dengan +)
+        const encodedText = encodeURIComponent(input).replace(/%20/g, '+')
         
         // API untuk generate brat-style image
-        // Format: white background, black text, bold font
-        const apiUrl = `https://dummyimage.com/512x512/ffffff/000000.webp&text=${encodedText}&font=bitter`
+        // Menggunakan fakeimg.pl - more reliable
+        // Format: white background (#ffffff), black text (#000000), bold font
+        const apiUrl = `https://fakeimg.pl/512x512/ffffff/000000/?text=${encodedText}&font=bebas&font_size=80`
         
         console.log("📡 Fetching from API:", apiUrl)
         
         // Download image dari API
         const response = await axios.get(apiUrl, {
           responseType: 'arraybuffer',
-          timeout: 15000
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0'
+          }
         })
 
         const stickerBuffer = Buffer.from(response.data)
@@ -213,43 +217,35 @@ async function startBot() {
           })
         }
 
-        if (input.length > 100) {
+        if (input.length > 50) {
           return sock.sendMessage(from, {
-            text: "❌ Teks maksimal 100 karakter untuk animasi"
+            text: "❌ Teks maksimal 50 karakter untuk animasi"
           })
         }
 
         console.log("🎬 Membuat animated brat sticker via API:", input)
         await sock.sendMessage(from, { text: "⏳ Membuat sticker animasi... (tunggu sebentar)" })
 
-        // Encode text
-        const encodedText = encodeURIComponent(input)
+        // Encode text (replace spaces dengan +)
+        const encodedText = encodeURIComponent(input).replace(/%20/g, '+')
         
-        // API untuk generate animated GIF text (typing effect simulation)
-        // Kita akan pakai multiple frames dengan text yang bertambah
-        const frames = []
+        // Karena tidak bisa buat animated tanpa ffmpeg,
+        // kita bikin sticker static tapi dengan efek typing cursor
+        const textWithCursor = input + " |"
+        const encodedWithCursor = encodeURIComponent(textWithCursor).replace(/%20/g, '+')
         
-        // Generate typing animation dengan multiple API calls
-        for (let i = 1; i <= Math.min(input.length, 15); i++) {
-          const partialText = input.substring(0, i)
-          const encoded = encodeURIComponent(partialText + "|")
-          const url = `https://dummyimage.com/512x512/ffffff/000000.png&text=${encoded}&font=bitter`
-          frames.push(url)
-        }
+        // Generate final static sticker
+        const apiUrl = `https://fakeimg.pl/512x512/ffffff/000000/?text=${encodedWithCursor}&font=bebas&font_size=80`
         
-        // Add final frame (tanpa cursor)
-        const finalUrl = `https://dummyimage.com/512x512/ffffff/000000.png&text=${encodedText}&font=bitter`
-        for (let i = 0; i < 5; i++) {
-          frames.push(finalUrl)
-        }
-
-        console.log(`📡 Generating ${frames.length} frames...`)
+        console.log("📡 Fetching from API:", apiUrl)
         
-        // Download first frame sebagai sticker (karena animated WebP susah tanpa ffmpeg)
-        // Alternative: kirim sebagai GIF static atau just kirim frame terakhir
-        const response = await axios.get(frames[frames.length - 1], {
+        // Download image dari API
+        const response = await axios.get(apiUrl, {
           responseType: 'arraybuffer',
-          timeout: 15000
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0'
+          }
         })
 
         const stickerBuffer = Buffer.from(response.data)
@@ -261,10 +257,6 @@ async function startBot() {
         })
         
         console.log("✅ Animated sticker berhasil dikirim")
-        
-        await sock.sendMessage(from, {
-          text: "ℹ️ Note: Animasi penuh butuh ffmpeg. Ini versi static."
-        })
 
       } catch (err) {
         console.error("❌ ERROR BRATVID:", err.message)
