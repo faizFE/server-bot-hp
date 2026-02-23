@@ -1,5 +1,7 @@
 const pino = require("pino")
 const qrcode = require("qrcode-terminal")
+const Jimp = require("jimp")
+const fs = require("fs")
 
 const { 
   default: makeWASocket,
@@ -217,10 +219,15 @@ async function startBot() {
 │ • .ping
 │   Cek status bot
 │
-└─ *UTILITY*
-  • .open
-    Buka foto/video view once
-    (Reply pesan view once)
+├─ *UTILITY*
+│ • .open
+│   Buka foto/video view once
+│   (Reply pesan view once)
+│
+└─ *CREATIVE*
+  • .brat <teks>
+    Bikin gambar aesthetic brat
+    (contoh: .brat summer)
 
 ━━━━━━━━━━━━━━━━━
 🏃 Bot Server HP
@@ -428,6 +435,93 @@ async function startBot() {
           })
         } else {
           console.log("⚠️ Bot tidak terhubung, tidak bisa kirim pesan error")
+        }
+      }
+    }
+
+    // ===== BRAT =====
+    if (text.toLowerCase().startsWith(".brat")) {
+      if (!isConnected) {
+        return sock.sendMessage(from, {
+          text: "❌ Bot sedang tidak terhubung. Tunggu sebentar..."
+        }).catch(() => console.log("⚠️ Tidak bisa kirim pesan, bot disconnect"))
+      }
+      
+      try {
+        // Get text after .brat
+        const bratText = text.slice(5).trim()
+        
+        if (!bratText) {
+          return sock.sendMessage(from, {
+            text: "❌ Kasih teks dong!\n\nContoh:\n.brat summer\n.brat club classics\n.brat 365"
+          })
+        }
+        
+        await sock.sendMessage(from, { text: "🎨 Bikin gambar brat..." })
+        
+        console.log("🎨 Creating brat image with text:", bratText)
+        
+        // Brat aesthetic colors
+        const bratGreen = 0x8ACE00FF // #8ACE00 - iconic brat lime green
+        
+        // Create image 800x800
+        const image = new Jimp(800, 800, bratGreen)
+        
+        // Load font - use built-in font
+        const font = await Jimp.loadFont(Jimp.FONT_SANS_128_BLACK)
+        
+        // Add text in center (lowercase for brat aesthetic)
+        const finalText = bratText.toLowerCase()
+        
+        // Calculate text position to center it
+        const textWidth = Jimp.measureText(font, finalText)
+        const textHeight = Jimp.measureTextHeight(font, finalText, 700)
+        
+        const x = (800 - textWidth) / 2
+        const y = (800 - textHeight) / 2
+        
+        // Print text on image
+        image.print(
+          font,
+          x,
+          y,
+          {
+            text: finalText,
+            alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
+            alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE
+          },
+          700,
+          700
+        )
+        
+        // Save to buffer
+        const buffer = await image.getBufferAsync(Jimp.MIME_PNG)
+        
+        console.log("✅ Brat image created:", buffer.length, "bytes")
+        
+        if (!isConnected) {
+          console.log("❌ Bot disconnect setelah buat gambar")
+          return
+        }
+        
+        // Send image
+        await sock.sendMessage(from, {
+          image: buffer,
+          caption: `🟢 *brat* by ${bratText}`
+        })
+        
+        console.log("✅ Brat image sent!")
+        
+      } catch (err) {
+        console.error("❌ ERROR BRAT:", err.message)
+        console.error("Stack:", err.stack)
+        
+        if (isConnected) {
+          sock.sendMessage(from, {
+            text: `❌ Gagal bikin gambar brat: ${err.message}`
+          }).catch(e => {
+            console.log("⚠️ Gagal kirim error message:", e.message)
+          })
         }
       }
     }
