@@ -467,7 +467,7 @@ async function startBot() {
         // Create image 800x800
         const image = new Jimp(800, 800, bratGreen)
         
-        // Load font - use built-in font
+        // Load font - use built-in font (largest available)
         const font = await Jimp.loadFont(Jimp.FONT_SANS_128_BLACK)
         
         // Add text in center (lowercase for brat aesthetic)
@@ -475,23 +475,17 @@ async function startBot() {
         
         // Calculate text position to center it
         const textWidth = Jimp.measureText(font, finalText)
-        const textHeight = Jimp.measureTextHeight(font, finalText, 700)
+        const textHeight = Jimp.measureTextHeight(font, finalText, 800)
         
         const x = (800 - textWidth) / 2
         const y = (800 - textHeight) / 2
         
-        // Print text on image
+        // Print text on image (simple method - jimp style)
         image.print(
           font,
           x,
           y,
-          {
-            text: finalText,
-            alignmentX: Jimp.HORIZONTAL_ALIGN_CENTER,
-            alignmentY: Jimp.VERTICAL_ALIGN_MIDDLE
-          },
-          700,
-          700
+          finalText
         )
         
         // Save to buffer
